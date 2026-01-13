@@ -1,50 +1,47 @@
+const express = require("express");
 const http = require("http");
 const https = require("https");
 const zlib = require("zlib");
 
-module.exports = async (req, res) => {
-  const get = (url, headers) =>
-    new Promise((resolve, reject) => {
-      const lib = url.startsWith("https") ? https : http;
-      const request = lib.get(url, { headers }, (response) => {
-        let chunks = [];
+const app = express();
 
-        response.on("data", (chunk) => chunks.push(chunk));
-        response.on("end", () => {
-          const buffer = Buffer.concat(chunks);
-
-          
-          const encoding = response.headers["content-encoding"];
-          try {
-            if (encoding === "gzip") {
-              zlib.gunzip(buffer, (err, decoded) => {
-                if (err) return reject(err);
-                resolve(decoded.toString());
-              });
-            } else if (encoding === "deflate") {
-              zlib.inflate(buffer, (err, decoded) => {
-                if (err) return reject(err);
-                resolve(decoded.toString());
-              });
-            } else {
-              resolve(buffer.toString());
-            }
-          } catch (e) {
-            reject(e);
+const get = (url, headers) =>
+  new Promise((resolve, reject) => {
+    const lib = url.startsWith("https") ? https : http;
+    const request = lib.get(url, { headers }, (response) => {
+      let chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => {
+        const buffer = Buffer.concat(chunks);
+        const encoding = response.headers["content-encoding"];
+        try {
+          if (encoding === "gzip") {
+            zlib.gunzip(buffer, (err, decoded) => {
+              if (err) return reject(err);
+              resolve(decoded.toString());
+            });
+          } else if (encoding === "deflate") {
+            zlib.inflate(buffer, (err, decoded) => {
+              if (err) return reject(err);
+              resolve(decoded.toString());
+            });
+          } else {
+            resolve(buffer.toString());
           }
-        });
+        } catch (e) {
+          reject(e);
+        }
       });
-
-      request.on("error", reject);
     });
+    request.on("error", reject);
+  });
 
-  const { type } = Object.fromEntries(
-    new URL(req.url, "http://localhost").searchParams
-  );
+app.get("/api/smshadi", async (req, res) => {
+  const { type } = req.query;
 
   if (!type) {
-    res.statusCode = 400;
-    return res.end(JSON.stringify({ error: "Missing ?type parameter" }));
+    res.status(400).json({ error: "Missing ?type parameter" });
+    return;
   }
 
   const headers = {
@@ -53,7 +50,8 @@ module.exports = async (req, res) => {
     Accept: "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest",
     "Accept-Encoding": "gzip, deflate",
-    "Accept-Language": "en-US,en;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-GB;q=0.6,es-PE;q=0.5,es;q=0.4",
+    "Accept-Language":
+      "en-US,en;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-GB;q=0.6,es-PE;q=0.5,es;q=0.4",
     Cookie: "PHPSESSID=qdooi3op2ufa6102vanp0holcp",
   };
 
@@ -70,10 +68,8 @@ module.exports = async (req, res) => {
     headers.Referer =
       "http://185.2.83.39/ints/client/SMSCDRStats";
   } else {
-    res.statusCode = 400;
-    return res.end(
-      JSON.stringify({ error: "Invalid type (use sms or numbers)" })
-    );
+    res.status(400).json({ error: "Invalid type (use sms or numbers)" });
+    return;
   }
 
   try {
@@ -81,7 +77,8 @@ module.exports = async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     res.end(data);
   } catch (err) {
-    res.statusCode = 500;
-    res.end(JSON.stringify({ error: "Fetch failed", details: err.message }));
+    res.status(500).json({ error: "Fetch failed", details: err.message });
   }
-};
+});
+
+app.listen(3000, () => console.log("Server running on http://localhost:3000"));
